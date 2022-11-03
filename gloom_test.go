@@ -1,8 +1,9 @@
 package gloom
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFilter_Insert(t *testing.T) {

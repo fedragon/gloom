@@ -2,15 +2,18 @@ package gloom
 
 import (
 	"errors"
+
 	"github.com/spaolacci/murmur3"
 )
 
+// Filter represents a Bloom Filter with `m` elements and `k` number of hashes.
 type Filter struct {
-	bits BitArray
+	bits *BitArray
 	m    uint64
 	k    uint64
 }
 
+// NewFilter returns a filter with provided parameters, or an error if the inputs are invalid.
 func NewFilter(size, numHashes uint64) (*Filter, error) {
 	if numHashes == 0 {
 		return nil, errors.New("I need at least one hash to work")
@@ -26,9 +29,11 @@ func NewFilter(size, numHashes uint64) (*Filter, error) {
 // Insert inserts a new entry in the bloom filter
 func (f *Filter) Insert(value string) error {
 	h1, h2 := hash([]byte(value))
+
 	for i := uint64(0); i < f.k; i++ {
 		h := nthHash(h1, h2, i, f.m)
-		if err := f.bits.Flip(int(h)); err != nil {
+
+		if err := f.bits.Flip(h); err != nil {
 			return err
 		}
 	}
@@ -39,15 +44,12 @@ func (f *Filter) Insert(value string) error {
 // Contains checks if the bloom filter (possibly) contains the value
 func (f *Filter) Contains(value string) (bool, error) {
 	h1, h2 := hash([]byte(value))
+
 	for i := uint64(0); i < f.k; i++ {
 		h := nthHash(h1, h2, i, f.m)
-		exists, err := f.bits.At(int(h))
-		if err != nil {
-			return false, err
-		}
 
-		if !exists {
-			return false, err
+		if exists, err := f.bits.At(h); err != nil || !exists {
+			return exists, err
 		}
 	}
 
