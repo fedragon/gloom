@@ -2,27 +2,50 @@ package gloom
 
 import (
 	"errors"
+	"math"
 
 	"github.com/spaolacci/murmur3"
 )
 
 // Filter represents a Bloom Filter with `m` elements and `k` number of hashes.
 type Filter struct {
-	bits *BitArray
-	m    uint64
-	k    uint64
+	elems *BitArray
+	m     uint64 // size
+	k     uint64 // number of hashing functions
 }
 
-// NewFilter returns a filter with provided parameters, or an error if the inputs are invalid.
-func NewFilter(size, numHashes uint64) (*Filter, error) {
+// NewFilter returns a bloom filter which can store up to `n` elements with an approximate false positives' rate `p`.
+// It returns an error if any of the inputs is invalid.
+// Empirical tests show that, given a desired rate of 0.05, the actual rate is 0.01 <= x <= 0.08
+func NewFilter(n uint64, p float64) (*Filter, error) {
+	if n == 0 {
+		return nil, errors.New("n cannot be zero")
+	}
+
+	if p <= 0 {
+		return nil, errors.New("p must be greater than zero")
+	}
+
+	// source: https://en.wikipedia.org/wiki/Bloom_filter#Optimal_number_of_hash_functions
+	m := math.Abs((float64(n) * math.Log(p)) / math.Pow(math.Ln2, 2))
+	k := math.Abs(math.Log2(p))
+
+	return newFilter(uint64(math.Ceil(m)), uint64(math.Ceil(k)))
+}
+
+func newFilter(size, numHashes uint64) (*Filter, error) {
+	if size == 0 {
+		return nil, errors.New("size cannot be zero")
+	}
+
 	if numHashes == 0 {
-		return nil, errors.New("I need at least one hash to work")
+		return nil, errors.New("numHashes cannot be zero")
 	}
 
 	return &Filter{
-		bits: NewBitArray(size),
-		m:    size,
-		k:    numHashes,
+		elems: NewBitArray(size),
+		m:     size,
+		k:     numHashes,
 	}, nil
 }
 
@@ -33,7 +56,7 @@ func (f *Filter) Insert(value string) error {
 	for i := uint64(0); i < f.k; i++ {
 		h := nthHash(h1, h2, i, f.m)
 
-		if err := f.bits.Flip(h); err != nil {
+		if err := f.elems.Flip(h); err != nil {
 			return err
 		}
 	}
@@ -48,8 +71,8 @@ func (f *Filter) Contains(value string) (bool, error) {
 	for i := uint64(0); i < f.k; i++ {
 		h := nthHash(h1, h2, i, f.m)
 
-		if exists, err := f.bits.At(h); err != nil || !exists {
-			return exists, err
+		if exists, err := f.elems.At(h); err != nil || !exists {
+			return false, err
 		}
 	}
 
